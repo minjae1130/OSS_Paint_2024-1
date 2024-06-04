@@ -1,62 +1,75 @@
 import tkinter as tk
+from tkinter import ttk
+from tkcalendar import Calendar
+import sqlite3
 
-class DrawingApp:
+# 데이터베이스 설정
+conn = sqlite3.connect('finance.db')
+c = conn.cursor()
+
+# 테이블 생성
+c.execute('''
+    CREATE TABLE IF NOT EXISTS goals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT,
+        amount REAL,
+        description TEXT
+    )
+''')
+conn.commit()
+
+class FinanceApp:
     def __init__(self, root):
-        # Tkinter 윈도우 생성
         self.root = root
-        self.root.title("Simple Drawing App")
+        self.root.title("가계부")
 
-        # 그림을 그릴 캔버스 생성
-        self.canvas = tk.Canvas(self.root, width=400, height=400, bg="white")
-        self.canvas.pack()
+        # 달력 생성
+        self.calendar = Calendar(root, selectmode='day', year=2024, month=6, day=4)
+        self.calendar.pack(pady=20)
 
-        # 그림 히스토리를 저장할 리스트 생성
-        self.history = []
+        # 목표 추가 버튼
+        self.add_goal_button = ttk.Button(root, text="목표 추가", command=self.add_goal)
+        self.add_goal_button.pack(pady=10)
 
-        # 메뉴 생성
-        self.create_menu()
+        # 목표 보기 버튼
+        self.view_goals_button = ttk.Button(root, text="목표 보기", command=self.view_goals)
+        self.view_goals_button.pack(pady=10)
 
-        # 마우스 이벤트에 따라 그림을 그리는 이벤트 핸들러 바인딩
-        self.canvas.bind("<B1-Motion>", self.draw)
+    def add_goal(self):
+        self.new_window = tk.Toplevel(self.root)
+        self.new_window.title("목표 추가")
 
-    def create_menu(self):
-        # 메뉴 생성 및 연결
-        menubar = tk.Menu(self.root)
-        self.root.config(menu=menubar)
-        file_menu = tk.Menu(menubar)
-        menubar.add_cascade(label="File", menu=file_menu)
+        tk.Label(self.new_window, text="금액:").pack(pady=5)
+        self.amount_entry = tk.Entry(self.new_window)
+        self.amount_entry.pack(pady=5)
 
-        # 파일 메뉴에 저장, 불러오기, 지우기 항목 추가
-        file_menu.add_command(label="Save", command=self.save)
-        file_menu.add_command(label="Load", command=self.load)
-        file_menu.add_command(label="Clear", command=self.clear)
+        tk.Label(self.new_window, text="설명:").pack(pady=5)
+        self.description_entry = tk.Entry(self.new_window)
+        self.description_entry.pack(pady=5)
 
-    def draw(self, event):
-        # 마우스가 움직일 때마다 그림을 그림
-        x, y = event.x, event.y
-        self.canvas.create_oval(x-2, y-2, x+2, y+2, fill="black")
-        self.history.append((x, y))  # 그림 히스토리에 현재 좌표 추가
+        save_button = ttk.Button(self.new_window, text="저장", command=self.save_goal)
+        save_button.pack(pady=10)
 
-    def save(self):
-        # 그림 히스토리를 파일로 저장
-        with open("drawing.txt", "w") as f:
-            for x, y in self.history:
-                f.write(f"{x},{y}\n")
+    def save_goal(self):
+        date = self.calendar.get_date()
+        amount = self.amount_entry.get()
+        description = self.description_entry.get()
 
-    def load(self):
-        # 그림 히스토리를 파일에서 불러와서 캔버스에 그림
-        self.clear()
-        with open("drawing.txt", "r") as f:
-            for line in f:
-                x, y = map(int, line.strip().split(","))
-                self.canvas.create_oval(x-2, y-2, x+2, y+2, fill="black")
-                self.history.append((x, y))  # 불러온 좌표를 그림 히스토리에 추가
+        c.execute("INSERT INTO goals (date, amount, description) VALUES (?, ?, ?)", (date, amount, description))
+        conn.commit()
+        self.new_window.destroy()
 
-    def clear(self):
-        # 캔버스와 그림 히스토리를 지움
-        self.canvas.delete("all")
-        self.history = []
+    def view_goals(self):
+        self.view_window = tk.Toplevel(self.root)
+        self.view_window.title("목표 보기")
 
+        date = self.calendar.get_date()
+        goals = c.execute("SELECT amount, description FROM goals WHERE date = ?", (date,)).fetchall()
+
+        for goal in goals:
+            tk.Label(self.view_window, text=f"금액: {goal[0]}, 설명: {goal[1]}").pack(pady=5)
+
+# 메인 실행
 root = tk.Tk()
-app = DrawingApp(root)
+app = FinanceApp(root)
 root.mainloop()
